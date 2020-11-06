@@ -1,0 +1,28 @@
+#%RAML 1.0 Library
+
+types:
+  Menu:
+    properties:
+      id:
+        displayName: id
+        required: false
+        type: integer
+        format: int64
+      categoryType:
+        displayName: categoryType
+        required: true
+        type: string
+        enum: ["PIZZA","SALAD","SOUP","DESSERT","BEVERAGE","ALCOHOL"]
+      name:
+        displayName: name
+        required: true
+        type: string
+      description:
+        displayName: description
+        required: true
+        type: string
+      price:
+        displayName: price
+        required: true
+        type: number
+        format: double

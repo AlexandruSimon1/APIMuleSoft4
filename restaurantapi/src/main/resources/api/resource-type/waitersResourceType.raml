@@ -1,0 +1,47 @@
+#%RAML 1.0 Library
+securitySchemes:
+  oauth_2_0: !include /securitySchemes/securityScheme.raml
+resourceTypes:
+  waiters-collection:
+    get?:
+      securedBy: [oauth_2_0]
+      description: This is used to fetch <<resourcePathName>>
+      responses:
+        200:
+          body:
+            application/json:
+              example: |
+                <<exampleReference1>>
+    post?:
+      securedBy: [oauth_2_0]
+      description: This is used to create <<resourcePathName>>
+      body:
+        application/json:
+          type: <<libraryReference1>>
+      responses:
+        201:
+          body:
+            application/json:
+              example: |
+                <<exampleReference2>>
+    put?:
+      securedBy: [oauth_2_0]
+      description: This is used to update <<resourcePathName>>
+      body:
+        application/json:
+          type: <<libraryReference2>>
+      responses:
+        200:
+          body:
+            application/json:
+              example: |
+                <<exampleReference3>>
+    delete?:
+      securedBy: [oauth_2_0]
+      description: This is used to delete <<resourcePathName>>
+      responses:
+        204:
+          body:
+            application/json:
+              example: |
+                <<exampleReference4>>

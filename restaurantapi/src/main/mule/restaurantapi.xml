@@ -1,0 +1,979 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit" xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:secure-properties="http://www.mulesoft.org/schema/mule/secure-properties" xmlns:vm="http://www.mulesoft.org/schema/mule/vm" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd  http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd http://www.mulesoft.org/schema/mule/secure-properties http://www.mulesoft.org/schema/mule/secure-properties/current/mule-secure-properties.xsd">
+    <apikit:config name="restaurantapi-config" api="restaurantapi.raml" outboundHeadersMapName="outboundHeaders" httpStatusVarName="httpStatus" />
+    <db:config name="Restaurant_DB" doc:name="Database Config" doc:id="fc39acfd-b042-4de1-b378-4be13c264e19">
+        <db:my-sql-connection host="${secure::db.host}" port="${secure::db.port}" user="${secure::db.username}" password="${secure::db.password}" database="${secure::db.name}">
+            <db:pooling-profile>
+                <db:additional-properties>
+                    <db:additional-property key="useSSL" value="false" />
+                </db:additional-properties>
+            </db:pooling-profile>
+        </db:my-sql-connection>
+    </db:config>
+    <configuration-properties doc:name="Configuration properties" doc:id="9abf6bea-ccbf-4972-862c-8d2a900e6eec" file="${mule.env}.properties" />
+	<secure-properties:config name="Secure_Properties_Config" doc:name="Secure Properties Config" doc:id="1bc1c003-a2d1-447f-b2fd-f8d2d0682fe2" file="${mule.env}.properties" key="${secure.key}" >
+		<secure-properties:encrypt algorithm="Blowfish" />
+	</secure-properties:config>
+	<http:request-config name="HTTP_Request_configuration" doc:name="HTTP Request configuration" doc:id="4ba165ab-578f-44d4-98d1-d9b0f8731b8c">
+		<http:request-connection host="localhost" port="8081"/>
+	</http:request-config>
+	<flow name="restaurantapi-main">
+        <http:listener path="/api/v1/*" config-ref="HTTP_Domain">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers><![CDATA[#[vars.outboundHeaders default {}]]]></http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:body><![CDATA[#[payload]]]></http:body>
+                <http:headers><![CDATA[#[vars.outboundHeaders default {}]]]></http:headers>
+            </http:error-response>
+        </http:listener>
+        <logger level="INFO" doc:name="Logger" doc:id="5c2350fc-91f7-4df6-8f01-430e1986fe0b" message="Validate the token " />
+		<http:request method="GET" doc:name="Request" doc:id="70a4abeb-855e-4ebf-b35f-7a2a839602a9" config-ref="HTTP_Request_configuration" path="/validate" target="localhost:8081/api/v1/*">
+			<http:headers ><![CDATA[#[output application/java
+---
+{
+	"Authorization" : attributes.headers.authorization
+}]]]></http:headers>
+		</http:request>
+		<apikit:router config-ref="restaurantapi-config" />
+        <logger level="INFO" doc:name="Logger" doc:id="0e904911-bdf9-436a-bfb6-7e26e554ae5f" message="Token validated and information recevied" />
+        <error-handler>
+            <on-error-propagate type="APIKIT:BAD_REQUEST">
+                <ee:transform xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Bad request"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">400</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:NOT_FOUND">
+                <ee:transform xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Resource not found"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:METHOD_NOT_ALLOWED">
+                <ee:transform xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Method not allowed"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">405</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:NOT_ACCEPTABLE">
+                <ee:transform xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Not acceptable"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">406</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:UNSUPPORTED_MEDIA_TYPE">
+                <ee:transform xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Unsupported media type"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">415</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:NOT_IMPLEMENTED">
+                <ee:transform xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Not Implemented"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">501</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+    <flow name="restaurantapi-console">
+        <http:listener path="/console/*" config-ref="HTTP_Domain">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers><![CDATA[#[vars.outboundHeaders default {}]]]></http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:body><![CDATA[#[payload]]]></http:body>
+                <http:headers><![CDATA[#[vars.outboundHeaders default {}]]]></http:headers>
+            </http:error-response>
+        </http:listener>
+        <apikit:console config-ref="restaurantapi-config" />
+        <error-handler>
+            <on-error-propagate type="APIKIT:NOT_FOUND">
+                <ee:transform xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Resource not found"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+    <flow name="put:\checkout\(id):application\json:restaurantapi-config">
+        <logger level="INFO" doc:name="Logger" doc:id="c06bcfa6-5262-4f53-9a8e-78eaac72d6fc" message="Updating checkout in data base" />
+        <set-variable value="#[attributes.uriParams.id]" doc:name="Set Variable" doc:id="73c29ab2-3fac-40bd-a55d-4dea29a7471f" variableName="checkoutId" />
+        <db:update doc:name="Update" doc:id="2302fd5e-f0f1-4284-9f0d-4e69c14062c3" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[update checkout set payment_type=:paymentType, orders_id=:ordersId where id=:checkoutId]]></db:sql>
+            <db:input-parameters><![CDATA[#[{
+	checkoutId:vars.checkoutId,
+	paymentType:payload.paymentType,
+	ordersId:payload.ordersId
+}]]]></db:input-parameters>
+        </db:update>
+        <db:select doc:name="Select" doc:id="24c3f079-0b90-46a9-b7bf-3169d3843b50" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[select checkout.id,payment_type,orders.order_number,category_type,name,description,price from checkout join menus join orders where checkout.id=:checkoutId and checkout.orders_id=orders.id and orders.menus_id=menus.id;]]></db:sql>
+            <db:input-parameters><![CDATA[#[checkoutId:vars.checkoutId]]]></db:input-parameters>
+        </db:select>
+        <ee:transform xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload groupBy $.id pluck{
+	"Status":200,
+	"message":"Updated",
+	id:$$,
+	paymentType:$.payment_type distinctBy $ reduce $$+$,
+	orderNumber:$.order_number distinctBy $ reduce $$+$,
+	categoryType:$.category_type distinctBy $ reduce $$+$,
+	name:$.name distinctBy $ reduce $$+$,
+	description:$.description distinctBy $ reduce $$+$,
+	price:$.price distinctBy $ reduce $$+$
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <logger level="INFO" doc:name="Logger" doc:id="161a8e29-3deb-4436-8573-7a2f9b72051d" message="Finished update checkout in data base" />
+    </flow>
+    <flow name="put:\waiters\(id):application\json:restaurantapi-config">
+        <logger level="INFO" doc:name="Logger" doc:id="e13beebd-a8ba-47eb-800a-5fb7bcc7b129" message="Updating waiter in data base" />
+        <set-variable value="#[attributes.uriParams.id]" doc:name="Set Variable" doc:id="bf1b1224-c78d-4c12-bb20-13fbb2056b66" variableName="waitersId" />
+        <db:update doc:name="Update" doc:id="2f74acb6-6cc3-4cb3-877f-53c19f70010e" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[update waiters set first_name=:firstName, last_name=:lastName, date_of_birth=:dateOfBirth, address=:address, phone_number=:phoneNumber,
+email=:email where id=:waitersId]]></db:sql>
+            <db:input-parameters><![CDATA[#[{
+	waitersId:vars.waitersId,
+  firstName: payload.firstName,
+  lastName: payload.lastName,
+  dateOfBirth: payload.dateOfBirth,
+  address: payload.address,
+  phoneNumber: payload.phoneNumber,
+  email: payload.email
+}]]]></db:input-parameters>
+        </db:update>
+        <db:select doc:name="Select" doc:id="5447de0d-d489-41f4-b54d-c88a76a32dc4" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[select * from waiters where id=:waitersId]]></db:sql>
+            <db:input-parameters><![CDATA[#[waitersId:vars.waitersId]]]></db:input-parameters>
+        </db:select>
+        <ee:transform xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload groupBy $.ID pluck{
+	"Status":200,
+	"message":"Updated",
+	id:$$,
+	firstName:$.FIRST_NAME distinctBy $ reduce $$+$,
+	lastName:$.LAST_NAME distinctBy $ reduce $$+$,
+	dateOfBirth:$.DATE_OF_BIRTH distinctBy $ reduce $$+$,
+	address:$.ADDRESS distinctBy $ reduce $$+$,
+	phoneNumber:$.PHONE_NUMBER distinctBy $ reduce $$+$,
+	email:$.EMAIL distinctBy $ reduce $$+$
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <logger level="INFO" doc:name="Logger" doc:id="745fc6b0-505f-4ab1-9227-db087022c585" message="Finished update waiter in data base" />
+    </flow>
+    <flow name="put:\administrators\(id):application\json:restaurantapi-config">
+        <logger level="INFO" doc:name="Logger" doc:id="c6cab3d6-b294-43cc-b1e7-6b6b7d27861b" message="Updating administrator in data base" />
+        <set-variable value="#[attributes.uriParams.id]" doc:name="Set Variable" doc:id="6d4a7965-b3f0-4ea0-a5e9-97b206e5b412" variableName="adminId" />
+        <db:update doc:name="Update" doc:id="cb35a6ca-170a-4962-9737-ffeabca31831" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[update administrators set first_name=:firstName, last_name=:lastName, date_of_birth=:dateOfBirth, address=:address, phone_number=:phoneNumber,
+email=:email where id=:adminId]]></db:sql>
+            <db:input-parameters><![CDATA[#[{
+	adminId:vars.adminId,
+  firstName: payload.firstName,
+  lastName: payload.lastName,
+  dateOfBirth: payload.dateOfBirth,
+  address: payload.address,
+  phoneNumber: payload.phoneNumber,
+  email: payload.email
+}]]]></db:input-parameters>
+        </db:update>
+        <db:select doc:name="Select" doc:id="66a13c65-1662-4f4e-8f09-4ba3fc3feee3" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[select * from administrators where id=:adminId]]></db:sql>
+            <db:input-parameters><![CDATA[#[adminId:vars.adminId]]]></db:input-parameters>
+        </db:select>
+        <ee:transform xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload groupBy $.ID pluck{
+	"Status":200,
+	"message":"Updated",
+	id:$$,
+	firstName:$.FIRST_NAME distinctBy $ reduce $$+$,
+	lastName:$.LAST_NAME distinctBy $ reduce $$+$,
+	dateOfBirth:$.DATE_OF_BIRTH distinctBy $ reduce $$+$,
+	address:$.ADDRESS distinctBy $ reduce $$+$,
+	phoneNumber:$.PHONE_NUMBER distinctBy $ reduce $$+$,
+	email:$.EMAIL distinctBy $ reduce $$+$
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <logger level="INFO" doc:name="Logger" doc:id="a2e9298f-62c7-4ed2-83f5-3621ae9c6fee" message="Finished update administrator in data base" />
+    </flow>
+    <flow name="put:\menus\(id):application\json:restaurantapi-config">
+        <logger level="INFO" doc:name="Logger" doc:id="7d9412fd-9364-4719-a5a6-6d7160280121" message="Updating product in data base" />
+        <set-variable value="#[attributes.uriParams.id]" doc:name="Set Variable" doc:id="d1ae1180-cc98-47d1-ace6-d223f9016bf6" variableName="menusId" />
+        <db:update doc:name="Update" doc:id="ec3f2254-662c-482e-813c-7dbfcb281a4f" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[update menus set category_type=:categoryType, name=:name, description=:description, price=:price where id=:menusId]]></db:sql>
+            <db:input-parameters><![CDATA[#[{
+	menusId:vars.menusId,
+	categoryType: payload.categoryType,
+	name: payload.name,
+	description:payload.description,
+	price:payload.price
+}]]]></db:input-parameters>
+        </db:update>
+        <db:select doc:name="Select" doc:id="7c41ec86-5a90-4934-ae90-e7fb218759e6" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[select * from menus where id=:menusId]]></db:sql>
+            <db:input-parameters><![CDATA[#[menusId:vars.menusId]]]></db:input-parameters>
+        </db:select>
+        <ee:transform xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload groupBy $.ID pluck{
+	"Status":200,
+	"message":"Updated",
+	id:$$,
+	categoryType:$.CATEGORY_TYPE distinctBy $ reduce $$+$,
+	name:$.NAME distinctBy $ reduce $$+$,
+	description:$.DESCRIPTION distinctBy $ reduce $$+$,
+	price:$.PRICE distinctBy $ reduce $$+$
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <logger level="INFO" doc:name="Logger" doc:id="4282ba4a-9e6e-4830-bfc5-52d859ee1319" message="Finished update product in data base" />
+    </flow>
+    <flow name="put:\tables\(id):application\json:restaurantapi-config">
+        <logger level="INFO" doc:name="Logger" doc:id="57a16371-abdf-41fc-a08a-823ff59525fc" message="Updating table in data base" />
+        <set-variable value="#[attributes.uriParams.id]" doc:name="Set Variable" doc:id="54f495e9-4c36-410d-a1ee-7115eb6ec608" variableName="tablesId" />
+        <db:update doc:name="Update" doc:id="7f587366-921a-4a85-90b6-63c86e05b757" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[update tables set number=:number, orders_id=:ordersId where id=:tablesId]]></db:sql>
+            <db:input-parameters><![CDATA[#[{
+	tablesId:vars.tablesId,
+	number:payload.number,
+	ordersId:payload.ordersId
+}]]]></db:input-parameters>
+        </db:update>
+        <db:select doc:name="Select" doc:id="4ef79239-13b3-4535-8440-6e0d25c1a8f7" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[select tables.id,orders.order_number,number,category_type,name,description,price from tables join menus join orders where tables.id=:tablesId and tables.orders_id=orders.id and orders.menus_id=menus.id]]></db:sql>
+            <db:input-parameters><![CDATA[#[tablesId:vars.tablesId]]]></db:input-parameters>
+        </db:select>
+        <ee:transform xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload groupBy $.id pluck{
+	"Status":200,
+	"message":"Updated",
+	id:$$,
+	orderNumber:$.order_number distinctBy $ reduce $$+$,
+	number:$.number distinctBy $ reduce $$+$,
+	categoryType:$.category_type distinctBy $ reduce $$+$,
+	name:$.name distinctBy $ reduce $$+$,
+	description:$.description distinctBy $ reduce $$+$,
+	price:$.price distinctBy $ reduce $$+$
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <logger level="INFO" doc:name="Logger" doc:id="95bcc0a0-d8d5-4f70-a8b2-ebe2515d5c4c" message="Finished update table in data base" />
+    </flow>
+    <flow name="put:\orders\(id):application\json:restaurantapi-config">
+        <logger level="INFO" doc:name="Logger" doc:id="4a297433-c160-4b06-a2c7-9bddf90ac108" message="Updating order in data base" />
+        <set-variable value="#[attributes.uriParams.id]" doc:name="Set Variable" doc:id="70eff41d-bc81-4eda-9551-feda4888f94a" variableName="ordersId" />
+        <db:update doc:name="Update" doc:id="cded4871-d7be-4fdf-8237-feaf9852a1d2" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[update orders set order_number=:orderNumber, menus_id=:menusId where id=:ordersId]]></db:sql>
+            <db:input-parameters><![CDATA[#[{
+	ordersId:vars.ordersId,
+	orderNumber:payload.orderNumber,
+	menusId:payload.menusId
+}]]]></db:input-parameters>
+        </db:update>
+        <db:select doc:name="Select" doc:id="17e5a45d-ce8f-4564-a57e-6d3f87542df6" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[select orders.id,order_number,orders.menus_id,category_type,name,description,price from orders inner join menus where orders.menus_id=menus.id and orders.id=:ordersId]]></db:sql>
+            <db:input-parameters><![CDATA[#[ordersId:vars.id]]]></db:input-parameters>
+        </db:select>
+        <ee:transform xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload groupBy $.id pluck{
+	"Status":200,
+	"message":"Updated",
+	id:$$,
+	orderNumber:$.order_number distinctBy $ reduce $$+$,
+	menusId:$.menus_id distinctBy $ reduce $$+$,
+	categoryType:$.category_type distinctBy $ reduce $$+$,
+	name:$.name distinctBy $ reduce $$+$,
+	description:$.description distinctBy $ reduce $$+$,
+	price:$.price distinctBy $ reduce $$+$
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <logger level="INFO" doc:name="Logger" doc:id="8052f5ce-329a-404a-b31a-ab1d0cf728be" message="Finished update order in data base" />
+    </flow>
+    <flow name="delete:\waiters\(id):restaurantapi-config">
+        <logger level="INFO" doc:name="Logger" doc:id="285182b9-fc23-4b0a-a24b-a92eeac609e9" message="Deleting waiter in data base" />
+        <set-variable value="#[attributes.uriParams.id]" doc:name="Set Variable" doc:id="e5fc3a54-fae9-429c-93fe-3484f2530f8c" variableName="waitersId" />
+        <db:delete doc:name="Delete" doc:id="255a8e4b-8cb6-436d-a33d-7f36e2ad96e1" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[delete from waiters where id =:waitersId]]></db:sql>
+            <db:input-parameters><![CDATA[#[waitersId:vars.waitersId]]]></db:input-parameters>
+        </db:delete>
+        <ee:transform xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd" doc:id="19a3457f-9c35-4b99-a51d-d86f9fd7cb86">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "Status":204,
+  "message":"Deleted"
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <logger level="INFO" doc:name="Logger" doc:id="20ded668-570b-48a0-ad27-4e42590bd4a4" message="Finished delete waiter in data base" />
+    </flow>
+    <flow name="delete:\tables\(id):restaurantapi-config">
+        <logger level="INFO" doc:name="Logger" doc:id="c9bd7cda-030f-474f-b2a2-fb46812c3e9d" message="Deleting table in data base" />
+        <set-variable value="#[attributes.uriParams.id]" doc:name="Set Variable" doc:id="b67528bf-6657-4b7c-ba77-63854c07edb7" variableName="tablesId" />
+        <db:delete doc:name="Delete" doc:id="c67a83c2-3686-4ff2-88d6-01b19db5af7c" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[delete from tables where id=:tablesId]]></db:sql>
+            <db:input-parameters><![CDATA[#[tablesId:vars.tablesId]]]></db:input-parameters>
+        </db:delete>
+        <ee:transform xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "Status":204,
+  "message":"Deleted"
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <logger level="INFO" doc:name="Logger" doc:id="e43273ad-b423-41e7-a55e-99f233e04f00" message="Finished delete table in data base" />
+    </flow>
+    <flow name="delete:\menus\(id):restaurantapi-config">
+        <logger level="INFO" doc:name="Logger" doc:id="3d771a43-3ac3-4e10-a3f2-234357365230" message="Delete product in data base" />
+        <set-variable value="#[attributes.uriParams.id]" doc:name="Set Variable" doc:id="dbdee09e-298e-4a82-a150-5a1e822f9775" variableName="menusId" />
+        <db:delete doc:name="Delete" doc:id="fcaf5f4a-de07-4c9e-baec-65a775441842" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[delete from menus where id=:menusId]]></db:sql>
+            <db:input-parameters><![CDATA[#[menusId:vars.menusId]]]></db:input-parameters>
+        </db:delete>
+        <ee:transform xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload: {
+  "Status":204,
+  "message":"Deleted"
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <logger level="INFO" doc:name="Logger" doc:id="c94b5edf-b6d2-442e-bca3-d18b2276e498" message="Finished delete product in data base" />
+    </flow>
+    <flow name="delete:\checkout\(id):restaurantapi-config">
+        <logger level="INFO" doc:name="Logger" doc:id="2bc2716e-d24a-4c84-93a0-8026951feb3f" message="Deleting checkout in data base" />
+        <set-variable value="#[attributes.uriParams.id]" doc:name="Set Variable" doc:id="8c945fd0-0ea2-433e-827a-e0c05304fcc8" variableName="checkoutId" />
+        <db:delete doc:name="Delete" doc:id="168f5954-e175-4e5e-b1cf-7b2c506dbe48" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[delete from checkout where id=:checkoutId]]></db:sql>
+            <db:input-parameters><![CDATA[#[checkoutId:vars.checkoutId]]]></db:input-parameters>
+        </db:delete>
+        <ee:transform xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "Status":204,
+  "message":"Deleted"
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <logger level="INFO" doc:name="Logger" doc:id="e5e79653-4042-4006-9d98-5ae8e9477eee" message="Finished delete checkout in data base" />
+    </flow>
+    <flow name="delete:\orders\(id):restaurantapi-config">
+        <logger level="INFO" doc:name="Logger" doc:id="4c0d8218-b306-4333-9b95-a386a2fba594" message="Deleting order in data base" />
+        <set-variable value="#[attributes.uriParams.id]" doc:name="Set Variable" doc:id="851b044b-71bc-4959-8a12-3cc5a08871a6" variableName="ordersId" />
+        <db:delete doc:name="Delete" doc:id="3422e0ea-73d7-47b5-80a1-217a822dc88f" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[delete from orders where id=:ordersId]]></db:sql>
+            <db:input-parameters><![CDATA[#[ordersId:vars.ordersId]]]></db:input-parameters>
+        </db:delete>
+        <ee:transform xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "Status":204,
+  "message":"Deleted"
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <logger level="INFO" doc:name="Logger" doc:id="74be7533-02d7-4f6e-a834-7542ddb1f68f" message="Finished delete order in data base" />
+    </flow>
+    <flow name="delete:\administrators\(id):restaurantapi-config">
+        <logger level="INFO" doc:name="Logger" doc:id="1ba0837d-8a0b-43c3-a60f-7bb840d45be6" message="Deleting administrator in data base" />
+        <set-variable value="#[attributes.uriParams.id]" doc:name="Set Variable" doc:id="fb4330ae-4fd4-41bb-9b5f-ee3449cd17cb" variableName="adminId" />
+        <db:delete doc:name="Delete" doc:id="12a0e3bc-9a17-4bbd-a490-b282c9096bf4" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[delete from administrators where id=:adminId]]></db:sql>
+            <db:input-parameters><![CDATA[#[adminId:vars.adminId]]]></db:input-parameters>
+        </db:delete>
+        <ee:transform xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "Status":204,
+  "message":"Deleted"
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <logger level="INFO" doc:name="Logger" doc:id="02029b82-d183-43ba-ae36-7348ca973217" message="Finished delete administrator in data base" />
+    </flow>
+    <flow name="get:\administrators:restaurantapi-config">
+        <logger level="INFO" doc:name="Logger" doc:id="f9edb762-39bd-4e17-acb4-822fc52a2cb4" message="Get all administrator in data base" />
+        <db:select doc:name="Select" doc:id="4d22eb39-aad2-4399-b33a-a2f4e9c30b50" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[select * from administrators]]></db:sql>
+        </db:select>
+        <ee:transform doc:name="Transform Message" doc:id="a1108148-886b-423a-9b79-aa6dd8387b4e">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload groupBy $.ID pluck{
+	id:$$,
+	firstName:$.FIRST_NAME distinctBy $ reduce $$+$,
+	lastName:$.LAST_NAME distinctBy $ reduce $$+$,
+	dateOfBirth:$.DATE_OF_BIRTH distinctBy $ reduce $$+$,
+	address:$.ADDRESS distinctBy $ reduce $$+$,
+	phoneNumber:$.PHONE_NUMBER distinctBy $ reduce $$+$,
+	email:$.EMAIL distinctBy $ reduce $$+$
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <logger level="INFO" doc:name="Logger" doc:id="5d8a2bc7-f9c8-4072-a7cd-4a697a746706" message="Finished get all administrator in data base" />
+    </flow>
+    <flow name="get:\checkout:restaurantapi-config">
+        <logger level="INFO" doc:name="Logger" doc:id="98b70683-f869-425c-a6d8-1fdc330cc67d" message="Get all checkout in data base" />
+        <db:select doc:name="Select" doc:id="9b782dda-6a92-4497-98cb-829b959586ac" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[select checkout.id,payment_type,orders.order_number,category_type,name,description,price from checkout join menus join orders where checkout.orders_id=orders.id and orders.menus_id=menus.id;]]></db:sql>
+        </db:select>
+        <ee:transform xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload groupBy $.id pluck{
+	id:$$,
+	paymentType:$.payment_type distinctBy $ reduce $$+$,
+	orderNumber:$.order_number distinctBy $ reduce $$+$,
+	categoryType:$.category_type distinctBy $ reduce $$+$,
+	name:$.name distinctBy $ reduce $$+$,
+	description:$.description distinctBy $ reduce $$+$,
+	price:$.price distinctBy $ reduce $$+$
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <logger level="INFO" doc:name="Logger" doc:id="00681d05-5389-476b-afed-8a97067142b5" message="Finished get all checkout in data base" />
+    </flow>
+    <flow name="get:\menus:restaurantapi-config">
+        <logger level="INFO" doc:name="Logger" doc:id="68c05dc7-5197-45ef-8075-a112d58aa860" message="Get all menus in data base" />
+        <db:select doc:name="Select" doc:id="10e090c8-63f3-44ad-8594-f238a7573695" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[select * from menus]]></db:sql>
+        </db:select>
+        <ee:transform xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload groupBy $.ID pluck{
+	id:$$,
+	categoryType:$.CATEGORY_TYPE distinctBy $ reduce $$+$,
+	name:$.NAME distinctBy $ reduce $$+$,
+	description:$.DESCRIPTION distinctBy $ reduce $$+$,
+	price:$.PRICE distinctBy $ reduce $$+$
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <logger level="INFO" doc:name="Logger" doc:id="ffd3acb5-58c3-4c9f-9d49-8b36decc19bc" message="Finished get all menus in data base" />
+    </flow>
+    <flow name="get:\orders:restaurantapi-config">
+        <logger level="INFO" doc:name="Logger" doc:id="03642f92-6d77-481c-98f7-e49c07124d9e" message="Get all orders in data base" />
+        <db:select doc:name="Select" doc:id="e3fbd6f2-8cba-49de-af7a-9f0b078b0c4d" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[select orders.id,order_number,orders.menus_id,category_type,name,description,price from orders inner join menus where orders.menus_id=menus.id]]></db:sql>
+        </db:select>
+        <ee:transform xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload groupBy $.id pluck{
+	id:$$,
+	orderNumber:$.order_number distinctBy $ reduce $$+$,
+	menusId:$.menus_id distinctBy $ reduce $$+$,
+	categoryType:$.category_type distinctBy $ reduce $$+$,
+	name:$.name distinctBy $ reduce $$+$,
+	description:$.description distinctBy $ reduce $$+$,
+	price:$.price distinctBy $ reduce $$+$
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <logger level="INFO" doc:name="Logger" doc:id="1cecc36e-425a-4c52-ab86-812520136ac5" message="Finished get all orders in data base" />
+    </flow>
+    <flow name="get:\tables:restaurantapi-config">
+        <logger level="INFO" doc:name="Logger" doc:id="9ea7381c-828a-4407-962c-356ad7bdfd5e" message="Get all tables in data base" />
+        <db:select doc:name="Select" doc:id="5bbaf92b-5549-4ef0-8954-0da536c36cea" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[select tables.id,orders.order_number,number,category_type,name,description,price from tables join menus join orders where tables.orders_id=orders.id and orders.menus_id=menus.id]]></db:sql>
+        </db:select>
+        <ee:transform xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload groupBy $.id pluck{
+	id:$$,
+	orderNumber:$.order_number distinctBy $ reduce $$+$,
+	number:$.number distinctBy $ reduce $$+$,
+	categoryType:$.category_type distinctBy $ reduce $$+$,
+	name:$.name distinctBy $ reduce $$+$,
+	description:$.description distinctBy $ reduce $$+$,
+	price:$.price distinctBy $ reduce $$+$
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <logger level="INFO" doc:name="Logger" doc:id="dc0dfa85-e9bd-498e-aaa2-c86549f7d0a4" message="Finished get all checkout in data base" />
+    </flow>
+    <flow name="get:\waiters:restaurantapi-config">
+        <logger level="INFO" doc:name="Logger" doc:id="11008811-5771-4955-8fa4-1b1e49a9d48c" message="Get all waiters in data base" />
+        <db:select doc:name="Select" doc:id="756ba044-48fe-4545-98a7-fc70ec69de84" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[select * from waiters]]></db:sql>
+        </db:select>
+        <ee:transform doc:name="Transform Message" doc:id="6c6f6a62-3f21-4655-897b-a55bc5c277a2">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload groupBy $.ID pluck{
+	id:$$,
+	firstName:$.FIRST_NAME distinctBy $ reduce $$+$,
+	lastName:$.LAST_NAME distinctBy $ reduce $$+$,
+	dateOfBirth:$.DATE_OF_BIRTH distinctBy $ reduce $$+$,
+	address:$.ADDRESS distinctBy $ reduce $$+$,
+	phoneNumber:$.PHONE_NUMBER distinctBy $ reduce $$+$,
+	email:$.EMAIL distinctBy $ reduce $$+$
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <logger level="INFO" doc:name="Logger" doc:id="976ebaf5-fa4a-4644-9b0b-0b189c0eaba3" message="Finished get all waiters in data base" />
+    </flow>
+    <flow name="get:\administrators\(id):restaurantapi-config">
+        <logger level="INFO" doc:name="Logger" doc:id="d0c9e363-d987-4c4b-a013-509d8dc6c1a9" message="Get administrator by id" />
+        <set-variable value="#[attributes.uriParams.id]" doc:name="Set Variable" doc:id="b8807e94-774b-414e-b9cb-c26f0d5ae0fa" variableName="adminId" />
+        <db:select doc:name="Select" doc:id="8a7c5d96-e7ea-4260-ac29-2eb07e0cad77" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[select * from administrators where id=:adminId]]></db:sql>
+            <db:input-parameters><![CDATA[#[adminId:vars.adminId]]]></db:input-parameters>
+        </db:select>
+        <ee:transform xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload groupBy $.ID pluck{
+	id:$$,
+	firstName:$.FIRST_NAME distinctBy $ reduce $$+$,
+	lastName:$.LAST_NAME distinctBy $ reduce $$+$,
+	dateOfBirth:$.DATE_OF_BIRTH distinctBy $ reduce $$+$,
+	address:$.ADDRESS distinctBy $ reduce $$+$,
+	phoneNumber:$.PHONE_NUMBER distinctBy $ reduce $$+$,
+	email:$.EMAIL distinctBy $ reduce $$+$
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <logger level="INFO" doc:name="Logger" doc:id="51b3b68a-8a58-4e67-ba40-0546ff58e677" message="Finished get administrator by id" />
+    </flow>
+    <flow name="get:\orders\(id):restaurantapi-config">
+        <logger level="INFO" doc:name="Logger" doc:id="d165122f-c478-4a57-a182-b48c871f7622" message="Get order by id" />
+        <set-variable value="#[attributes.uriParams.id]" doc:name="Set Variable" doc:id="581676c5-7740-4853-a83c-8c57899673fa" variableName="ordersId" />
+        <db:select doc:name="Select" doc:id="a954be54-6880-4586-8be3-838aaa49dca8" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[select orders.id,order_number,orders.menus_id,category_type,name,description,price from orders inner join menus where orders.menus_id=menus.id and orders.id=:ordersId]]></db:sql>
+            <db:input-parameters><![CDATA[#[ordersId:vars.ordersId]]]></db:input-parameters>
+        </db:select>
+        <ee:transform xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload groupBy $.id pluck{
+	id:$$,
+	orderNumber:$.order_number distinctBy $ reduce $$+$,
+	menusId:$.menus_id distinctBy $ reduce $$+$,
+	categoryType:$.category_type distinctBy $ reduce $$+$,
+	name:$.name distinctBy $ reduce $$+$,
+	description:$.description distinctBy $ reduce $$+$,
+	price:$.price distinctBy $ reduce $$+$
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <logger level="INFO" doc:name="Logger" doc:id="0b90f0a5-b5ca-4541-b48f-971a18f54674" message="Finished get order by id" />
+    </flow>
+    <flow name="get:\waiters\(id):restaurantapi-config">
+        <logger level="INFO" doc:name="Logger" doc:id="7ae66c7c-c78b-4be9-9c55-3653ea451131" message="Get waiter by id" />
+        <set-variable value="#[attributes.uriParams.id]" doc:name="Set Variable" doc:id="7713a8b3-09da-422a-881d-e36a8d4af93e" variableName="id" />
+        <db:select doc:name="Select" doc:id="658cdb5a-b410-4e6c-bab0-d0d399c6e70e" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[select * from waiters where id=:id]]></db:sql>
+            <db:input-parameters><![CDATA[#[id:vars.id]]]></db:input-parameters>
+        </db:select>
+        <ee:transform xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload groupBy $.ID pluck{
+	id:$$,
+	firstName:$.FIRST_NAME distinctBy $ reduce $$+$,
+	lastName:$.LAST_NAME distinctBy $ reduce $$+$,
+	dateOfBirth:$.DATE_OF_BIRTH distinctBy $ reduce $$+$,
+	address:$.ADDRESS distinctBy $ reduce $$+$,
+	phoneNumber:$.PHONE_NUMBER distinctBy $ reduce $$+$,
+	email:$.EMAIL distinctBy $ reduce $$+$
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <logger level="INFO" doc:name="Logger" doc:id="97fb4bd5-ae59-403a-bb1a-c84a686b96c1" message="Finished get waiter by id" />
+    </flow>
+    <flow name="get:\checkout\(id):restaurantapi-config">
+        <logger level="INFO" doc:name="Logger" doc:id="77b114b1-d8c1-4aae-8f4f-7fd02386d850" message="Get checkout by id" />
+        <set-variable value="#[attributes.uriParams.id]" doc:name="Set Variable" doc:id="1ba02c2c-eb0e-42c0-b201-d795fc929f03" variableName="checkoutId" />
+        <db:select doc:name="Select" doc:id="0e3e9411-467c-4137-8e76-7c04a1f6425c" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[select checkout.id,payment_type,orders.order_number,category_type,name,description,price from checkout join menus join orders where checkout.id=:checkoutId and checkout.orders_id=orders.id and orders.menus_id=menus.id;]]></db:sql>
+            <db:input-parameters><![CDATA[#[checkoutId:vars.checkoutId]]]></db:input-parameters>
+        </db:select>
+        <ee:transform xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload groupBy $.id pluck{
+	id:$$,
+	paymentType:$.payment_type distinctBy $ reduce $$+$,
+	orderNumber:$.order_number distinctBy $ reduce $$+$,
+	categoryType:$.category_type distinctBy $ reduce $$+$,
+	name:$.name distinctBy $ reduce $$+$,
+	description:$.description distinctBy $ reduce $$+$,
+	price:$.price distinctBy $ reduce $$+$
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <logger level="INFO" doc:name="Logger" doc:id="e6d3ce32-35f9-426e-a28b-4f154217c58d" message="Finished get checkout by id" />
+    </flow>
+    <flow name="get:\menus\(id):restaurantapi-config">
+        <logger level="INFO" doc:name="Logger" doc:id="b03a60e7-b871-439e-870e-66525a59c3bb" message="Get product by id" />
+        <set-variable value="#[attributes.uriParams.id]" doc:name="Set Variable" doc:id="87fdbc83-a98a-430c-b9ee-4cb49d45c3a3" variableName="menusId" />
+        <db:select doc:name="Select" doc:id="4446a773-c939-4d1e-a8d0-1c9022f2e7cf" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[select * from menus where id=:menusId]]></db:sql>
+            <db:input-parameters><![CDATA[#[menusId:vars.menusId]]]></db:input-parameters>
+        </db:select>
+        <ee:transform xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload groupBy $.ID pluck{
+	id:$$,
+	categoryType:$.CATEGORY_TYPE distinctBy $ reduce $$+$,
+	name:$.NAME distinctBy $ reduce $$+$,
+	description:$.DESCRIPTION distinctBy $ reduce $$+$,
+	price:$.PRICE distinctBy $ reduce $$+$
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <logger level="INFO" doc:name="Logger" doc:id="7d9e4762-7baf-4dcf-a953-872365a509fc" message="Finished get product by id" />
+    </flow>
+    <flow name="get:\tables\(id):restaurantapi-config">
+        <logger level="INFO" doc:name="Logger" doc:id="310614be-fb55-40e2-8b07-e27fb2afd3dc" message="Get table by id" />
+        <set-variable value="#[attributes.uriParams.id]" doc:name="Set Variable" doc:id="be5a19d8-ae52-4f6d-8b3e-330ecba65a2c" variableName="tablesId" />
+        <db:select doc:name="Select" doc:id="c245f12e-89f3-4041-854e-7e1d6c182ffa" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[select tables.id,orders.order_number,number,category_type,name,description,price from tables join menus join orders where tables.id=:tablesId and tables.orders_id=orders.id and orders.menus_id=menus.id]]></db:sql>
+            <db:input-parameters><![CDATA[#[tablesId:vars.tablesId]]]></db:input-parameters>
+        </db:select>
+        <ee:transform xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload groupBy $.id pluck{
+	id:$$,
+	orderNumber:$.order_number distinctBy $ reduce $$+$,
+	number:$.number distinctBy $ reduce $$+$,
+	categoryType:$.category_type distinctBy $ reduce $$+$,
+	name:$.name distinctBy $ reduce $$+$,
+	description:$.description distinctBy $ reduce $$+$,
+	price:$.price distinctBy $ reduce $$+$
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <logger level="INFO" doc:name="Logger" doc:id="3763e3df-1d6c-48fc-a407-797473ff0e39" message="Finished get table by id" />
+    </flow>
+    <flow name="post:\administrators:application\json:restaurantapi-config">
+        <logger level="INFO" doc:name="Logger" doc:id="fa4cb18a-c61c-492a-9dc7-7f3fddf9d85e" message="Create administrator" />
+        <db:insert doc:name="Insert" doc:id="12ba9303-1147-4b34-a066-88e91c855cdf" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[insert into administrators (first_name, last_name, date_of_birth, address, phone_number, email)
+values (:firstName, :lastName, :dateOfBirth, :address, :phoneNumber, :email);]]></db:sql>
+            <db:input-parameters><![CDATA[#[{
+  firstName: payload.firstName,
+  lastName: payload.lastName,
+  dateOfBirth: payload.dateOfBirth,
+  address: payload.address,
+  phoneNumber: payload.phoneNumber,
+  email: payload.email
+}]]]></db:input-parameters>
+        </db:insert>
+        <db:select doc:name="Select" doc:id="96e2bf91-7266-4802-82be-626fb467c307" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[select * from administrators where id=(select last_insert_id());]]></db:sql>
+        </db:select>
+        <ee:transform xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload groupBy $.ID pluck{
+	"Status":201,
+	"message":"Created",
+	id:$$,
+	firstName:$.FIRST_NAME distinctBy $ reduce $$+$,
+	lastName:$.LAST_NAME distinctBy $ reduce $$+$,
+	dateOfBirth:$.DATE_OF_BIRTH distinctBy $ reduce $$+$,
+	address:$.ADDRESS distinctBy $ reduce $$+$,
+	phoneNumber:$.PHONE_NUMBER distinctBy $ reduce $$+$,
+	email:$.EMAIL distinctBy $ reduce $$+$
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <logger level="INFO" doc:name="Logger" doc:id="b65e7f5e-620e-402a-85c7-dcf12bd4293b" message="Finished create administrator" />
+    </flow>
+    <flow name="post:\checkout:application\json:restaurantapi-config">
+        <logger level="INFO" doc:name="Logger" doc:id="59fe01de-0267-4179-aa8a-e7bc7fdb1303" message="Create checkout" />
+        <db:insert doc:name="Insert" doc:id="74925b4d-da64-44f7-8c0d-c3c5ce0749c0" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[insert into checkout (payment_type,orders_id) values (:paymentType, :ordersId)]]></db:sql>
+            <db:input-parameters><![CDATA[#[{
+	paymentType:payload.paymentType,
+	ordersId:payload.ordersId
+}]]]></db:input-parameters>
+        </db:insert>
+        <db:select doc:name="Select" doc:id="8cdf916a-d07e-4296-a676-3830efc5ab7f" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[select checkout.id,payment_type,orders.order_number,category_type,name,description,price from checkout join menus join orders where checkout.id=(select last_insert_id()) and checkout.orders_id=orders.id and orders.menus_id=menus.id]]></db:sql>
+        </db:select>
+        <ee:transform xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload groupBy $.id pluck{
+	"Status":201,
+	"message":"Created",
+	id:$$,
+	paymentType:$.payment_type distinctBy $ reduce $$+$,
+	orderNumber:$.order_number distinctBy $ reduce $$+$,
+	categoryType:$.category_type distinctBy $ reduce $$+$,
+	name:$.name distinctBy $ reduce $$+$,
+	description:$.description distinctBy $ reduce $$+$,
+	price:$.price distinctBy $ reduce $$+$
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <logger level="INFO" doc:name="Logger" doc:id="e2d9792c-5915-4042-83c9-99e4983b7238" message="Finished create checkout" />
+    </flow>
+    <flow name="post:\menus:application\json:restaurantapi-config">
+        <logger level="INFO" doc:name="Logger" doc:id="b4dfa6e2-2377-4ad3-b5b4-94c15c258be4" message="Create product" />
+        <db:insert doc:name="Insert" doc:id="fd80dac3-c3d2-4ef0-be58-57136cc9daff" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[insert into menus (CATEGORY_TYPE, NAME, DESCRIPTION, PRICE) values (:categoryType, :name, :description, :price)
+]]></db:sql>
+            <db:input-parameters><![CDATA[#[{
+	categoryType: payload.categoryType,
+	name: payload.name,
+	description:payload.description,
+	price:payload.price
+}]]]></db:input-parameters>
+        </db:insert>
+		<db:select doc:name="Select" doc:id="4e36c522-6608-4968-92b8-9a2d05a642b1" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[select * from menus where id=(select last_insert_id());]]></db:sql>
+        </db:select>
+        <ee:transform xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload groupBy $.ID pluck{
+	"Status":201,
+	"message":"Created",
+	id:$$,
+	categoryType:$.CATEGORY_TYPE distinctBy $ reduce $$+$,
+	name:$.NAME distinctBy $ reduce $$+$,
+	description:$.DESCRIPTION distinctBy $ reduce $$+$,
+	price:$.PRICE distinctBy $ reduce $$+$
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="0db2e726-0892-4507-97f0-0455099d5fca" message="Finished create product" />
+    </flow>
+    <flow name="post:\orders:application\json:restaurantapi-config">
+        <logger level="INFO" doc:name="Logger" doc:id="7cab933b-8be4-4594-8a7a-7c12b3800aa3" message="Create order" />
+        <db:insert doc:name="Insert" doc:id="59b64dfe-39fb-4ba7-a83c-994a2624e10a" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[insert into orders (order_number,menus_id) values (:orderNumber, :menusId)]]></db:sql>
+            <db:input-parameters><![CDATA[#[{
+	orderNumber:payload.orderNumber,
+	menusId:payload.menusId
+}]]]></db:input-parameters>
+        </db:insert>
+        <db:select doc:name="Select" doc:id="4536310b-10d0-4714-b8a3-d61062c90d93" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[select orders.id,order_number,orders.menus_id,category_type,name,description,price from orders 
+inner join menus where orders.id=(select last_insert_id()) and orders.menus_id=menus.id]]></db:sql>
+        </db:select>
+        <ee:transform xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload groupBy $.id pluck{
+	"Status":201,
+	"message":"Created",
+	id:$$,
+	orderNumber:$.order_number distinctBy $ reduce $$+$,
+	menusId:$.menus_id distinctBy $ reduce $$+$,
+	categoryType:$.category_type distinctBy $ reduce $$+$,
+	name:$.name distinctBy $ reduce $$+$,
+	description:$.description distinctBy $ reduce $$+$,
+	price:$.price distinctBy $ reduce $$+$
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <logger level="INFO" doc:name="Logger" doc:id="410ff4a5-0585-4ec2-aaf0-10919ecfca6d" message="Finished create order" />
+    </flow>
+    <flow name="post:\tables:application\json:restaurantapi-config">
+        <logger level="INFO" doc:name="Logger" doc:id="85bbc6cd-5f32-46e0-890b-3f41c3187881" message="Create table" />
+        <db:insert doc:name="Insert" doc:id="c268abe3-c3dd-4140-9c7e-d4fab9426c99" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[insert into tables (number,orders_id) values (:number, :ordersId)]]></db:sql>
+            <db:input-parameters><![CDATA[#[{
+	number:payload.number,
+	ordersId:payload.ordersId
+}]]]></db:input-parameters>
+        </db:insert>
+        <db:select doc:name="Select" doc:id="5c951cd2-c0b0-454c-be36-2376479ea9d5" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[select tables.id,orders.order_number,number,category_type,name,description,price from tables join menus join orders where tables.id=(select last_insert_id()) and tables.orders_id=orders.id and orders.menus_id=menus.id]]></db:sql>
+        </db:select>
+        <ee:transform xsi:schemaLocation="http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload groupBy $.id pluck{
+	"Status":201,
+	"message":"Created",
+	id:$$,
+	orderNumber:$.order_number distinctBy $ reduce $$+$,
+	number:$.number distinctBy $ reduce $$+$,
+	categoryType:$.category_type distinctBy $ reduce $$+$,
+	name:$.name distinctBy $ reduce $$+$,
+	description:$.description distinctBy $ reduce $$+$,
+	price:$.price distinctBy $ reduce $$+$
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <logger level="INFO" doc:name="Logger" doc:id="049bf3da-6832-42c9-8d8c-d840051812d7" message="Finished create table" />
+    </flow>
+    <flow name="post:\waiters:application\json:restaurantapi-config">
+        <logger level="INFO" doc:name="Logger" doc:id="e5e0485a-02da-4597-a220-2c6eb8fe5d6a" message="Create waiter" />
+        <db:insert doc:name="Insert" doc:id="1e127d5e-b76e-4b58-9367-1e0a09c3f4da" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[insert into waiters (first_name, last_name, date_of_birth, address, phone_number, email)
+values (:firstName, :lastName, :dateOfBirth, :address, :phoneNumber, :email);]]></db:sql>
+            <db:input-parameters><![CDATA[#[{
+  firstName: payload.firstName,
+  lastName: payload.lastName,
+  dateOfBirth: payload.dateOfBirth,
+  address: payload.address,
+  phoneNumber: payload.phoneNumber,
+  email: payload.email
+}]]]></db:input-parameters>
+        </db:insert>
+        <db:select doc:name="Select" doc:id="fa163e95-ab24-44a8-855b-1e46202d7d12" config-ref="Restaurant_DB">
+            <db:sql><![CDATA[select * from waiters where id=(select last_insert_id());]]></db:sql>
+        </db:select>
+        <ee:transform xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd 
+http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd 
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload groupBy $.ID pluck{
+	"Status":201,
+	"message":"Created",
+	id:$$,
+	firstName:$.FIRST_NAME distinctBy $ reduce $$+$,
+	lastName:$.LAST_NAME distinctBy $ reduce $$+$,
+	dateOfBirth:$.DATE_OF_BIRTH distinctBy $ reduce $$+$,
+	address:$.ADDRESS distinctBy $ reduce $$+$,
+	phoneNumber:$.PHONE_NUMBER distinctBy $ reduce $$+$,
+	email:$.EMAIL distinctBy $ reduce $$+$
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+        <logger level="INFO" doc:name="Logger" doc:id="cc9d55a4-6402-4a63-a550-42757a991cf5" message="Finished create waiter" />
+    </flow>
+</mule>

@@ -1,0 +1,19 @@
+#%RAML 1.0 Library
+types:
+  Order:
+    properties:
+      id:
+        displayName: id
+        required: false
+        type: integer
+        format: int64
+      menus_id:
+        displayName: menusId
+        required: true
+        type: integer
+      order_number:
+        displayName: orderNumber
+        required: true
+        type: integer
+        format: int64
+      

@@ -1,0 +1,9 @@
+{
+  "id": 0,
+  "firstName": "string",
+  "lastName": "string",
+  "dateOfBirth": "1980-10-10",
+  "address": "string",
+  "phoneNumber": 0,
+  "email": "string"
+}

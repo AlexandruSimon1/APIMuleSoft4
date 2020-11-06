@@ -1,0 +1,169 @@
+#%RAML 1.0
+title: RestaurantAPI
+version: v1
+mediaType: 
+- application/json
+
+protocols:
+  - HTTP
+
+documentation:
+  - title: Restaurant API
+    content: This API is created for educational purpose only and is having the REST implementations that we should use for our endpoints
+traits:
+  client-id-required:
+    headers:
+      client_id:
+        type: string
+      client_secret:
+        type: string
+    responses:
+      401:
+        description: Unauthorized or invalid client application credentials
+      500:
+        description: Bad response from authorization server, or WSDL SOAP Fault error
+uses:
+  Administrators: libraries/administrators.raml    
+  Waiters: libraries/waiters.raml
+  Menus: libraries/menus.raml
+  Orders: libraries/orders.raml
+  Tables: libraries/tables.raml
+  Checkout: libraries/checkout.raml
+  administratorCollection: resource-type/administratorsResourceType.raml
+  waiterCollection: resource-type/waitersResourceType.raml
+  menuCollection: resource-type/menusResourceType.raml
+  orderCollection: resource-type/ordersResourceType.raml
+  tableCollection: resource-type/tablesResourceType.raml
+  checkoutCollection: resource-type/checkoutResourceType.raml
+
+/administrators:
+  type: {administratorCollection.administrators-collection:{ exampleReference1: !include example/administrators.example.json
+  ,libraryReference1: Administrators.Administrator,exampleReference2: !include example/administrators.example.json}}
+  get:
+    is: [client-id-required]
+  
+  post:
+    is: [client-id-required]
+  
+  /{id}:
+    type: {administratorCollection.administrators-collection:{ exampleReference1: !include example/administrators.example.json,
+    libraryReference2: Administrators.Administrator,exampleReference3: !include example/administrators.example.json,
+    exampleReference4: !include example/administrators.example.json}}
+    get:
+      is: [client-id-required]
+
+    put:
+      is: [client-id-required]
+     
+    delete:
+      is: [client-id-required]
+      
+/waiters:
+  type: {waiterCollection.waiters-collection:{ exampleReference1: !include example/waiters.example.json
+  ,libraryReference1: Waiters.Waiter,exampleReference2: !include example/waiters.example.json}}
+  get:
+    is: [client-id-required]
+
+  post:
+    is: [client-id-required]
+    
+  /{id}:
+    type: {waiterCollection.waiters-collection:{ exampleReference1: !include example/waiters.example.json,
+    libraryReference2: Waiters.Waiter,exampleReference3: !include example/waiters.example.json,
+    exampleReference4: !include example/waiters.example.json}}
+    get:
+      is: [client-id-required]
+      
+    put:
+      is: [client-id-required]
+      
+    delete:
+      is: [client-id-required]
+  
+/menus:
+  type: {menuCollection.menus-collection:{ exampleReference1: !include example/menus.example.json
+  ,libraryReference1: Menus.Menu,exampleReference2: !include example/menus.example.json}}
+  get:
+    is: [client-id-required]
+    
+  post:
+    is: [client-id-required]
+   
+  /{id}:
+    type: {menuCollection.menus-collection:{ exampleReference1: !include example/menus.example.json,
+    libraryReference2: Menus.Menu,exampleReference3: !include example/menus.example.json,
+    exampleReference4: !include example/menus.example.json}}
+    get:
+      is: [client-id-required]
+      
+    put:
+      is: [client-id-required]
+      
+    delete:
+      is: [client-id-required]
+      
+/orders:
+  type: {orderCollection.orders-collection:{ exampleReference1: !include example/orders.example.json
+  ,libraryReference1: Orders.Order,exampleReference2: !include example/orders.example.json}}
+  get:
+    is: [client-id-required]
+    
+  post:
+    is: [client-id-required]
+    
+  /{id}:
+    type: {orderCollection.orders-collection:{ exampleReference1: !include example/orders.example.json,
+    libraryReference2: Orders.Order,exampleReference3: !include example/orders.example.json,
+    exampleReference4: !include example/orders.example.json}}
+    get:
+      is: [client-id-required]
+      
+    put:
+      is: [client-id-required]
+      
+    delete:
+      is: [client-id-required]
+      
+/tables:
+  type: {tableCollection.tables-collection:{ exampleReference1: !include example/tables.example.json
+  ,libraryReference1: Tables.Table,exampleReference2: !include example/tables.example.json}}
+  get:
+    is: [client-id-required]
+    
+  post:
+    is: [client-id-required]
+    
+  /{id}:
+    type: {tableCollection.tables-collection:{ exampleReference1: !include example/tables.example.json,
+    libraryReference2: Tables.Table,exampleReference3: !include example/tables.example.json,
+    exampleReference4: !include example/tables.example.json}}
+    get:
+      is: [client-id-required]
+      
+    put:
+      is: [client-id-required]
+      
+    delete:
+      is: [client-id-required]
+      
+/checkout:
+  type: {checkoutCollection.checkout-collection:{ exampleReference1: !include example/checkout.example.json
+  ,libraryReference1: Checkout.Checkout,exampleReference2: !include example/checkout.example.json}}
+  get:
+    is: [client-id-required]
+    
+  post:
+    is: [client-id-required]
+    
+  /{id}:
+    type: {checkoutCollection.checkout-collection:{ exampleReference1: !include example/checkout.example.json,
+    libraryReference2: Checkout.Checkout,exampleReference3: !include example/checkout.example.json,
+    exampleReference4: !include example/checkout.example.json}}
+    get:
+      is: [client-id-required]
+      
+    put:
+      is: [client-id-required]
+      
+    delete:
+      is: [client-id-required]
